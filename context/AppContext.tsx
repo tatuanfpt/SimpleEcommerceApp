@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useContext, useEffect, useRef, useReducer, ReactNode } from 'react';
 import { Product } from '@/data/products';
+
+const STORAGE_KEY = 'shopvibe:state';
 
 export interface CartItem extends Product {
   quantity: number;
@@ -26,7 +29,8 @@ type Action =
   | { type: 'CLEAR_CART' }
   | { type: 'PLACE_ORDER' }
   | { type: 'LOGIN'; email: string }
-  | { type: 'LOGOUT' };
+  | { type: 'LOGOUT' }
+  | { type: 'HYDRATE'; state: AppState };
 
 function appReducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -80,6 +84,8 @@ function appReducer(state: AppState, action: Action): AppState {
       };
     case 'LOGOUT':
       return { ...state, user: null };
+    case 'HYDRATE':
+      return action.state;
     default:
       return state;
   }
@@ -96,6 +102,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     orders: [],
     user: null,
   });
+  const hydrated = useRef(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then(raw => {
+        if (raw) {
+          dispatch({ type: 'HYDRATE', state: JSON.parse(raw) });
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        hydrated.current = true;
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated.current) return;
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => {});
+  }, [state]);
+
   return (
     <AppContext.Provider value={{ state, dispatch }}>
       {children}
